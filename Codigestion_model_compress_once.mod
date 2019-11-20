@@ -153,9 +153,9 @@ sum {g in GAS, l in LANDFILL} ( life * (
 		(ad[l] * (upgrade_fc_intercept * crf + upgrade_vc_intercept + injection_fc_intercept * crf + injection_vc_intercept + comp_fc_intercept * crf + comp_vc_intercept + capture_intercept + pipe_fc[l] * crf + pipe_vc[l]) ) + ## all the constants go in here
 		lmop_om[l] + #piecewise estimation of the cost of digester
 		<<limit_upgrade_fc; (upgrade_fc_slope1 + injection_fc_slope1) * crf + upgrade_vc_slope1 + injection_vc_slope1, (upgrade_fc_slope2 + injection_fc_slope2) * crf + upgrade_vc_slope2 + injection_vc_slope2>> q_ch4f[l] + #capital cost of upgrading
-		<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[f] + #capital cost of co2 compression
-		<<limit_capture; capture_slope1, capture_slope2 >> q_capt[t,f] +
-		lcfs_price * compression_work * electricity_emissions * q_captf[f] + # subtracting emission credits 
+		<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[l] + #capital cost of co2 compression
+		<<limit_capture; capture_slope1, capture_slope2 >> q_capt[g,l] +
+		lcfs_price * compression_work * electricity_emissions * q_captf[l] + # subtracting emission credits 
 		q_ch4f[l] * (- rng_price -  d3_price ) -
 		q_ch4[g,l] * mj_per_mmbtu * 0.000001 * (lcfs_price * (ci_baseline - 45) ) )
 		)
