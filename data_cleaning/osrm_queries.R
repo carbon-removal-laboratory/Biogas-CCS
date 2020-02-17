@@ -7,7 +7,11 @@ library(sf)
 library(mapview)
 library(osrm)
 
+outpath="Pre_analysis/Directions_data/fsref_list.RData"
+
 # Functions
+
+# osrm_query takes in 2 lists of 100 row dataframes and returns a list of time and distance matrices 
 osrm_query <- function(source, destination) {
     # OSRM Query
   listi_distance <- list()  
@@ -35,6 +39,7 @@ osrm_query <- function(source, destination) {
   blah = list(listi_distance, listi_duration)
 }
 
+# unlist_n_save takes the output of osrm_query and organizes it into 2 distinct time and distance matrices
 unlist_n_save <- function(osrm_queries) {
   dd_list <- lapply(osrm_queries, function(x) {
     columns <- list()
@@ -87,6 +92,7 @@ names(coord_list) <- names(shp)
 list2env(coord_list, envir=.GlobalEnv)
 
 # Sorting data sets
+    ## Note that feedstock, refinery, and sequestration dfs have 3 columns: ID, lon, and lat.
 wwtp_ex <- wwtp %>% filter(AD=="Y") %>% select(ID, X, Y) #filter only for existing AD's at wwtp
 feedstock <- rbind(crop, msw, manure, process, lmop_existing, lmop_candidate, wwtp_ex) %>% 
   rename(lon=X, lat=Y) %>% mutate(ID = as.character(ID)) %>% distinct(ID, .keep_all = T) %>% 
@@ -150,7 +156,7 @@ for (i in list(feedstock, refinery)) {
   i[i$ID=="LP61", "lat"] <- "40.31282"
 } 
 
-# Make 100x100 lists 
+# Make 100x100 lists (this is the input of osrm.table)
 source.list <- split(feedstock, (seq(nrow(feedstock))-1) %/% 100)
 refin.list <- split(refinery, (seq(nrow(refinery))-1) %/% 100)
 seques.list <- split(sequestration, (seq(nrow(sequestration))-1) %/% 100)
@@ -169,10 +175,10 @@ rm(list = setdiff(ls(), c("source.list", "refin.list", "seques.list", "osrm_quer
 fs_refq <- osrm_query(source.list, refin.list)
 fs_ref <- unlist_n_save(fs_refq)
 rm(fs_refq)
-save(fs_ref, file = "Pre_analysis/Directions_data/fsref_list.RData")
+save(fs_ref, file = outpath)
 
 # AD sites -> sequestration sites
 ref_seqq <- osrm_query(refin.list, seques.list)
 ref_seq <- unlist_n_save(ref_seqq)
 rm(ref_seqq)
-save(ref_seq, file = "Pre_analysis/Directions_data/refseq_list.RData")
+save(ref_seq, file = outpath)
