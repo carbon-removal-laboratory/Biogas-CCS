@@ -149,35 +149,41 @@ var q_feedfwwtp{FACILITIES} >= 0;
 
 minimize Total_cost:
 
+sum {f in DIGESTER} (life * (
+	(ad[f] * (fc_intercept * crf + vc_intercept + upgrade_fc_intercept * crf + upgrade_vc_intercept + injection_fc_intercept * crf + injection_vc_intercept + comp_fc_intercept * crf +  comp_vc_intercept + capture_intercept + pipe_fc[f] * crf + pipe_vc[f]) ) + ## all the constants go in here
+	<<limit_fc; fc_slope1 * crf , fc_slope2 * crf >> q_feedf[f] + #piecewise estimation of the cost of digester
+	<<limit_vc; vc_slope1, vc_slope2>> q_feedfwwtp[f] +
+	<<limit_upgrade_fc; (upgrade_fc_slope1 + injection_fc_slope1) * crf + upgrade_vc_slope1 + injection_vc_slope1, (upgrade_fc_slope2 + injection_fc_slope2) * crf + upgrade_vc_slope2 + injection_vc_slope2 >> q_ch4f[f] + #capital cost of upgrading
+	<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[f] + #capital cost of co2 compression
+	<<limit_capture; capture_slope1, capture_slope2 >> q_captf[f] + #annual cost of capture
+	lcfs_price * compression_work * electricity_emissions * q_captf[f] + # subtracting emission credits 
+	q_ch4f[f] * (- rng_price -  d5_price )
+	)
+) -
 sum {t in CO, f in DIGESTER} ( life * (
-		(ad[f] * (fc_intercept * crf + vc_intercept + upgrade_fc_intercept * crf + upgrade_vc_intercept + injection_fc_intercept * crf + injection_vc_intercept + comp_fc_intercept * crf +  comp_vc_intercept + capture_intercept + pipe_fc[f] * crf + pipe_vc[f]) ) + ## all the constants go in here
-		<<limit_fc; fc_slope1 * crf , fc_slope2 * crf >> q_feedf[f] + #piecewise estimation of the cost of digester
-		<<limit_vc; vc_slope1, vc_slope2>> q_feedfwwtp[f] +
-		<<limit_upgrade_fc; (upgrade_fc_slope1 + injection_fc_slope1) * crf + upgrade_vc_slope1 + injection_vc_slope1, (upgrade_fc_slope2 + injection_fc_slope2) * crf + upgrade_vc_slope2 + injection_vc_slope2 >> q_ch4f[f] + #capital cost of upgrading
-		<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[f] + #capital cost of co2 compression
-		<<limit_capture; capture_slope1, capture_slope2 >> q_capt[t,f] + #annual cost of capture
-		lcfs_price * compression_work * electricity_emissions * q_captf[f] + # subtracting emission credits 
-		q_ch4f[f] * (- rng_price -  d5_price ) -
 		q_ch4[t,f] * mj_per_mmbtu * 0.000001 * (lcfs_price * (ci_baseline - c_intensity[t]) ) )
 		)
 	+
 sum{(s,f) in VALID_PAIR, t in TYPE}  (life * (
-		(fs_dist[s,f] * fs_cost_per_mile * 2 + fs_time[s,f]/60 * fs_cost_per_hour * 2) * q_feed[s,f,t]/25  ) +
-		per_ton[s,f] * cost_per_ton * q_feed[s,f,t]
+		(fs_dist[s,f] * fs_cost_per_mile * 2 + fs_time[s,f]/60 * fs_cost_per_hour * 2) * q_feed[s,f,t]/25  +
+		per_ton[s,f] * cost_per_ton * q_feed[s,f,t] )
 		)
 	+
-sum {g in GAS, l in LANDFILL} ( life * (
+sum {l in LANDFILL} ( life *  (
 		(ad[l] * (upgrade_fc_intercept * crf + upgrade_vc_intercept + injection_fc_intercept * crf + injection_vc_intercept + comp_fc_intercept * crf + comp_vc_intercept + capture_intercept + pipe_fc[l] * crf + pipe_vc[l]) ) + ## all the constants go in here
 		lmop_om[l] + #piecewise estimation of the cost of digester
 		<<limit_upgrade_fc; (upgrade_fc_slope1 + injection_fc_slope1) * crf + upgrade_vc_slope1 + injection_vc_slope1, (upgrade_fc_slope2 + injection_fc_slope2) * crf + upgrade_vc_slope2 + injection_vc_slope2>> q_ch4f[l] + #capital cost of upgrading
 		<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[l] + #capital cost of co2 compression
-		<<limit_capture; capture_slope1, capture_slope2 >> q_capt[g,l] +
+		<<limit_capture; capture_slope1, capture_slope2 >> q_captf[l] +
 		lcfs_price * compression_work * electricity_emissions * q_captf[l] + # subtracting emission credits 
-		q_ch4f[l] * (- rng_price -  d3_price ) -
-		q_ch4[g,l] * mj_per_mmbtu * 0.000001 * (lcfs_price * (ci_baseline - c_intensity[g]) ) )
+		q_ch4f[l] * (- rng_price -  d3_price )
+	)
+) -
+sum {g in GAS, l in LANDFILL} ( life *
+		q_ch4[g,l] * mj_per_mmbtu * 0.000001 * (lcfs_price * (ci_baseline - c_intensity[g]) )
 		)
 	+
-sum {i in INJECTION, t in TYPE} (life * (
+sum {i in INJECTION} (life * (
 		seq[i] * (fc_injection[i] * crf + seismic[i] * crf +
 		vc_injection[i] ) +
 		<<limit_comp2_fc; comp2_fc_slope1 * crf + comp2_vc_slope1, comp2_fc_slope2 * crf + comp2_vc_slope2>> q_co2seq[i] + #capital cost of co2 compression
