@@ -130,7 +130,7 @@ param cost_per_ton default 4.5;
 # Decision variables
 
 var ad {FACILITIES} binary; # binary to decide if a facility is active
-var trans_mat {VALID_SEQ} binary; #binary to decide where to send co2 
+var trans_mat {VALID_SEQ} binary; #binary to decide where to send co2
 var q_feed {VALID_PAIR, TYPE} >= 0;
 var seq {INJECTION} binary; # binary to decide if a sequestration site is used
 var q_co2seq {INJECTION} >= 0;
@@ -156,7 +156,7 @@ sum {f in DIGESTER} (life * (
 	<<limit_upgrade_fc; (upgrade_fc_slope1 + injection_fc_slope1) * crf + upgrade_vc_slope1 + injection_vc_slope1, (upgrade_fc_slope2 + injection_fc_slope2) * crf + upgrade_vc_slope2 + injection_vc_slope2 >> q_ch4f[f] + #capital cost of upgrading
 	<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[f] + #capital cost of co2 compression
 	<<limit_capture; capture_slope1, capture_slope2 >> q_captf[f] + #annual cost of capture
-	lcfs_price * compression_work * electricity_emissions * q_captf[f] + # subtracting emission credits 
+	lcfs_price * compression_work * electricity_emissions * q_captf[f] + # subtracting emission credits
 	q_ch4f[f] * (- rng_price -  d5_price )
 	)
 ) -
@@ -170,12 +170,11 @@ sum{(s,f) in VALID_PAIR, t in TYPE}  (life * (
 		)
 	+
 sum {l in LANDFILL} ( life *  (
-		(ad[l] * (upgrade_fc_intercept * crf + upgrade_vc_intercept + injection_fc_intercept * crf + injection_vc_intercept + comp_fc_intercept * crf + comp_vc_intercept + capture_intercept + pipe_fc[l] * crf + pipe_vc[l]) ) + ## all the constants go in here
-		lmop_om[l] + #piecewise estimation of the cost of digester
+		(ad[l] * (upgrade_fc_intercept * crf + upgrade_vc_intercept + injection_fc_intercept * crf + injection_vc_intercept + comp_fc_intercept * crf + comp_vc_intercept + capture_intercept + pipe_fc[l] * crf + pipe_vc[l] + lmop_om[l]) ) + ## all the constants go in here
 		<<limit_upgrade_fc; (upgrade_fc_slope1 + injection_fc_slope1) * crf + upgrade_vc_slope1 + injection_vc_slope1, (upgrade_fc_slope2 + injection_fc_slope2) * crf + upgrade_vc_slope2 + injection_vc_slope2>> q_ch4f[l] + #capital cost of upgrading
 		<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[l] + #capital cost of co2 compression
 		<<limit_capture; capture_slope1, capture_slope2 >> q_captf[l] +
-		lcfs_price * compression_work * electricity_emissions * q_captf[l] + # subtracting emission credits 
+		lcfs_price * compression_work * electricity_emissions * q_captf[l] + # subtracting emission credits
 		q_ch4f[l] * (- rng_price -  d3_price )
 	)
 ) -
@@ -187,7 +186,7 @@ sum {i in INJECTION} (life * (
 		seq[i] * (fc_injection[i] * crf + seismic[i] * crf +
 		vc_injection[i] ) +
 		<<limit_comp2_fc; comp2_fc_slope1 * crf + comp2_vc_slope1, comp2_fc_slope2 * crf + comp2_vc_slope2>> q_co2seq[i] + #capital cost of co2 compression
-		lcfs_price * compression_work2 * electricity_emissions * q_co2seq[i] # subtracting emission credits 
+		lcfs_price * compression_work2 * electricity_emissions * q_co2seq[i] # subtracting emission credits
 		- seq_credit * (q_co2seq[i])+
 		monitoring_cost * q_co2seq[i] -
 		lcfs_price * q_co2seq[i] )
@@ -208,7 +207,7 @@ subject to supply_constraint {s in SOURCE, t in TYPE}:
 	sum{(s,f) in VALID_PAIR} q_feed[s,f,t] <= supply[s,t] ;
 
 subject to fs_sum_nowwtp {f in FACILITIES}: #defining q_feedf, in tons
-	q_feedf[f] = sum{(s,f) in VALID_PAIR, t in TYPE} (q_feed[s,f,t] * ton[t] - q_feed[s,f,'wwtp'] * ton['wwtp']) ;
+	q_feedf[f] = sum{(s,f) in VALID_PAIR, t in TYPE} q_feed[s,f,t] * ton[t] - q_feed[s,f,'wwtp'] * ton['wwtp'] ;
 
 subject to fs_sum {f in FACILITIES}:
 	q_feedfwwtp[f] = sum {(s,f) in VALID_PAIR, t in TYPE} q_feed[s,f,t] * ton[t];
@@ -227,7 +226,7 @@ subject to captured_definition {t in TYPE, f in FACILITIES}: #defining quantity 
 
 subject to capt_sum {f in FACILITIES}: #defining q_captf
 	q_captf[f] = sum{t in TYPE} q_capt[t,f];
-	
+
 subject to co2_trans_constraint {f in FACILITIES}: #amount transported cannot be more than amount captured
 	sum{(f,i) in VALID_SEQ} q_co2trans[f,i] = q_captf[f];
 
@@ -236,4 +235,6 @@ subject to co2_seq_constraint {i in INJECTION}: #amount sequestered cannot be mo
 
 subject to co2_capacity_constraint {i in INJECTION}: #defining amount sequestered to be 0 if seq is not activated
 	q_co2seq[i] <= stor_cap[i] * seq[i];
-	
+
+subject to min_co2 {i in INJECTION}: #cannot be less than 50k
+	q_co2seq[i] >= 25000 * seq[i];
