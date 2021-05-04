@@ -1,12 +1,7 @@
-# Biogas-CCS Total Cost Model;Codigestion
-# Last updated: 12/19/2019
-# What has changed?
-# 	1) LMOP O&M is now a parameter by facility, which makes more sense than only calculating O&M for only processed LFG.
-# 	2) q_feed and q_feedwwtp: now O&M includes WWTP quantities; in codigestion_model, O&M did not include WWTP quantities.
-#	3) OUR NEW BASELINE SCENARIO IS: LCFS=$100, RFS = $0.25/D5 ~ $3.25/mmbtu, 45q = $50, rng price = $3
-# Update 10/15: We now take into consideration compression emissions.
-# THIS VERSION HAS COMPRESSION STRAIGHT TO 15MPA, SO ONLY COUNT CAPITAL COSTS ONCE
-# Update 12/19: We now also calculate transport costs directly in the model & account for transport emissions.
+### Biogas-CCS Total Cost Model; Codigestion ###
+### This is a .mod file to be included in a .run file for use in AMPL.
+### The model minimizes total cost over an assumed 15 years of project lifespan. Please refer to the pdf for more details.
+
 
 # Declaring sets
 set FACILITIES;
@@ -17,7 +12,6 @@ set CO within TYPE;
 set GAS within TYPE;
 set INJECTION;
 set SOURCE;
-set PIPELINES;
 set VALID_PAIR within {SOURCE, FACILITIES};
 set VALID_SEQ within {FACILITIES, INJECTION};
 
@@ -40,8 +34,6 @@ param vc_injection {INJECTION};
 param stor_cap {INJECTION};
 param seismic {INJECTION};
 
-param cellulosic {TYPE};
-param fstruck_capacity {TYPE};
 param vs {TYPE};
 param ts {TYPE};
 param ton {TYPE};
@@ -101,11 +93,12 @@ param limit_capture = 250333;
 
 param ch4_yield = 0.6; #changeable
 param rng_price default 1; #$/mmbtu
-param seq_credit default 50; #$/t CO2
+param limit_seqcredit default 100000;
+param seq_credit1 default 0;
+param seq_credit2 default 50; #$/t CO2
 param cellulosic_waiver default 6.50;
 param d5_price default 0; #$/mmbtu
 param d3_price = d5_price + cellulosic_waiver; #$/mmbtu
-param tipping = 20; #$/ton msw
 param ci_baseline = 79.21; #gco2e/mj
 param lcfs_price default 0; #$/credit
 param irr = 0.1;
@@ -116,6 +109,7 @@ param m3_to_mmbtu = 0.0368; # natural gas heat value
 param m3_to_gco2 = 1832;
 param m3_to_tco2 = 0.002;
 param co2truck_capacity = 25.67;
+param fstruck_capacity = 25;
 param monitoring_cost = 0.1;
 param compression_work = 51.78; #kwh/tco2/yr
 param compression_work2 = 29.01; #kwh/tco2/yr
@@ -126,11 +120,11 @@ param fs_cost_per_hour default 26.11;
 param rs_cost_per_mile default 0.8034;
 param rs_cost_per_hour default 18.31;
 param cost_per_ton default 4.5;
+param capt_rate default 0.9;
 
 # Decision variables
 
 var ad {FACILITIES} binary; # binary to decide if a facility is active
-var trans_mat {VALID_SEQ} binary; #binary to decide where to send co2
 var q_feed {VALID_PAIR, TYPE} >= 0;
 var seq {INJECTION} binary; # binary to decide if a sequestration site is used
 var q_co2seq {INJECTION} >= 0;
@@ -144,6 +138,7 @@ var q_ch4f{FACILITIES} >= 0;
 var q_captf{FACILITIES} >= 0;
 var q_additional{FACILITIES} >= 0;
 var q_feedfwwtp{FACILITIES} >= 0;
+var wwtponly{FACILITIES} >= 0;
 
 # Objective function
 
@@ -157,7 +152,8 @@ sum {f in DIGESTER} (life * (
 	<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[f] + #capital cost of co2 compression
 	<<limit_capture; capture_slope1, capture_slope2 >> q_captf[f] + #annual cost of capture
 	lcfs_price * compression_work * electricity_emissions * q_captf[f] + # subtracting emission credits
-	q_ch4f[f] * (- rng_price -  d5_price )
+	q_ch4f[f] * (- rng_price -  d5_price ) -
+	<<limit_seqcredit; seq_credit1, seq_credit2>> q_captf[f]
 	)
 ) -
 sum {t in CO, f in DIGESTER} ( life * (
@@ -165,7 +161,7 @@ sum {t in CO, f in DIGESTER} ( life * (
 		)
 	+
 sum{(s,f) in VALID_PAIR, t in TYPE}  (life * (
-		(fs_dist[s,f] * fs_cost_per_mile * 2 + fs_time[s,f]/60 * fs_cost_per_hour * 2) * q_feed[s,f,t]/25  +
+		(fs_dist[s,f] * fs_cost_per_mile * 2 + fs_time[s,f]/60 * fs_cost_per_hour * 2) * q_feed[s,f,t]/fstruck_capacity  +
 		per_ton[s,f] * cost_per_ton * q_feed[s,f,t] )
 		)
 	+
@@ -175,7 +171,8 @@ sum {l in LANDFILL} ( life *  (
 		<<limit_comp_fc; comp_fc_slope1 * crf + comp_vc_slope1, comp_fc_slope2 * crf + comp_vc_slope2>> q_captf[l] + #capital cost of co2 compression
 		<<limit_capture; capture_slope1, capture_slope2 >> q_captf[l] +
 		lcfs_price * compression_work * electricity_emissions * q_captf[l] + # subtracting emission credits
-		q_ch4f[l] * (- rng_price -  d3_price )
+		q_ch4f[l] * (- rng_price -  d3_price ) -
+		<<limit_seqcredit; seq_credit1, seq_credit2>> q_captf[l]
 	)
 ) -
 sum {g in GAS, l in LANDFILL} ( life *
@@ -186,9 +183,9 @@ sum {i in INJECTION} (life * (
 		seq[i] * (fc_injection[i] * crf + seismic[i] * crf +
 		vc_injection[i] ) +
 		<<limit_comp2_fc; comp2_fc_slope1 * crf + comp2_vc_slope1, comp2_fc_slope2 * crf + comp2_vc_slope2>> q_co2seq[i] + #capital cost of co2 compression
-		lcfs_price * compression_work2 * electricity_emissions * q_co2seq[i] # subtracting emission credits
-		- seq_credit * (q_co2seq[i])+
+		lcfs_price * compression_work2 * electricity_emissions * q_co2seq[i] + # subtracting emission credits
 		monitoring_cost * q_co2seq[i] -
+		#seq_credit2 * q_co2seq[i] -
 		lcfs_price * q_co2seq[i] )
 		) +
 sum{(f,i) in VALID_SEQ}( life * (
@@ -206,11 +203,14 @@ subject to fs_quant {(s,f) in VALID_PAIR, t in TYPE} : #defining quantity of fee
 subject to supply_constraint {s in SOURCE, t in TYPE}:
 	sum{(s,f) in VALID_PAIR} q_feed[s,f,t] <= supply[s,t] ;
 
-subject to fs_sum_nowwtp {f in FACILITIES}: #defining q_feedf, in tons
-	q_feedf[f] = sum{(s,f) in VALID_PAIR, t in TYPE} q_feed[s,f,t] * ton[t] - q_feed[s,f,'wwtp'] * ton['wwtp'] ;
-
 subject to fs_sum {f in FACILITIES}:
 	q_feedfwwtp[f] = sum {(s,f) in VALID_PAIR, t in TYPE} q_feed[s,f,t] * ton[t];
+
+subject to wwtp_def {f in FACILITIES}:
+	wwtponly[f] = sum{(s,f) in VALID_PAIR} q_feed[s,f,'wwtp'] * ton['wwtp'];
+
+subject to fs_sum_nowwtp {f in FACILITIES}: #defining q_feedf, in tons
+	q_feedf[f] = 	q_feedfwwtp[f] - wwtponly[f];
 
 subject to biogas_definition {t in TYPE, f in FACILITIES}: #defining quantity of biogas
 	q_biogas[t,f] = sum{(s,f) in VALID_PAIR} q_feed[s,f,t] * ts[t] * vs[t] * biogas_yield[t] ;
@@ -222,7 +222,7 @@ subject to ch4_sum {f in FACILITIES}: #defining q_ch4f
 	q_ch4f[f] = sum{t in TYPE} q_ch4[t,f];
 
 subject to captured_definition {t in TYPE, f in FACILITIES}: #defining quantity of co2 captured
-	q_capt[t,f] = sum{ (s,f) in VALID_PAIR} q_feed[s,f,t] * ts[t] *vs[t] * biogas_yield[t] * (1-ch4_yield) * m3_to_tco2;
+	q_capt[t,f] = sum{ (s,f) in VALID_PAIR} q_feed[s,f,t] * ts[t] *vs[t] * biogas_yield[t] * (1-ch4_yield) * m3_to_tco2 * capt_rate;
 
 subject to capt_sum {f in FACILITIES}: #defining q_captf
 	q_captf[f] = sum{t in TYPE} q_capt[t,f];
